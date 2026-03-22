@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ReviewIQ — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Syne', 'sans-serif'],
+            serif: ['Instrument Serif', 'serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            cream: '#F5F1EA', bark: '#2C2416', ember: '#C94A1E',
+            moss: '#3A6144', sand: '#8C7B5E', parchment: '#EDE8DF',
+            night: '#03001C', nightCard: '#0A0118', nightBorder: '#86EFAC',
+            neonCyan: '#B6EADA', neonViolet: '#86EFAC',
+            neonLime: '#B6EADA', neonCoral: '#86EFAC', neonAmber: '#B6EADA',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .swap{display:inline-grid;user-select:none;place-content:center;cursor:pointer}
+    .swap>*{grid-column-start:1;grid-row-start:1;transition:opacity .3s,transform .3s}
+    .swap input{appearance:none;opacity:0;width:0;height:0}
+    .swap-rotate .swap-on{transform:rotate(45deg);opacity:0}
+    .swap-rotate .swap-off{transform:rotate(0deg);opacity:1}
+    .swap-rotate input:checked~.swap-on{transform:rotate(0deg);opacity:1}
+    .swap-rotate input:checked~.swap-off{transform:rotate(-45deg);opacity:0}
+
+    *{transition-property:background-color,border-color,color,box-shadow;transition-duration:.2s}
+    svg *{transition:none!important}
+
+    .dark .glow-cyan{box-shadow:0 0 20px 2px rgba(91,143,185,.15)}
+    .dark .glow-lime{box-shadow:0 0 20px 2px rgba(182,234,218,.13)}
+    .dark .glow-coral{box-shadow:0 0 20px 2px rgba(91,143,185,.15)}
+    .dark .glow-violet{box-shadow:0 0 20px 2px rgba(91,143,185,.15)}
+    .dark #sidebar{border-right:1px solid rgba(91,143,185,.12)}
+
+    /* Toast */
+    #toast{transition:opacity .3s,transform .3s}
+
+    /* Modal */
+    #modal-backdrop{transition:opacity .25s}
+
+    /* Bar chart animated fill */
+    .bar-fill{transition:width 1s cubic-bezier(.4,0,.2,1)}
+
+    /* Smooth number counter */
+    .counter{transition:none}
+
+    /* Notification dot pulse */
+    @keyframes ping{75%,100%{transform:scale(2);opacity:0}}
+    .ping{animation:ping 1s cubic-bezier(0,0,.2,1) infinite}
+
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:#EDE8DF;border-radius:99px}
+    .dark ::-webkit-scrollbar-thumb{background:#21262d}
+
+    .nav-tooltip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);
+      white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s}
+    .nav-item:hover .nav-tooltip{opacity:1}
+  </style>
+</head>
+<body class="bg-cream dark:bg-[#03001C] font-sans text-bark dark:text-[#B6EADA] min-h-screen">
+
+<!-- ══ TOAST ══ -->
+<div id="toast" class="fixed top-5 right-5 z-[100] opacity-0 translate-y-[-8px] pointer-events-none">
+  <div class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold
+              bg-bark dark:bg-[#0A0118] border border-white/10 dark:border-[#86EFAC]/30 text-cream dark:text-[#B6EADA] max-w-xs">
+    <span id="toast-icon">✓</span>
+    <span id="toast-msg">Done!</span>
+  </div>
+</div>
+
+<!-- ══ REPLY MODAL ══ -->
+<div id="modal-backdrop" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none flex items-center justify-center p-4">
+  <div id="modal-box" class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/25
+       rounded-2xl p-6 w-full max-w-md shadow-2xl scale-95 transition-all duration-200">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <h3 class="font-serif italic text-xl dark:text-[#B6EADA]">Reply to Review</h3>
+        <p id="modal-reviewer" class="text-xs text-sand dark:text-[#86EFAC] mt-0.5"></p>
+      </div>
+      <button onclick="closeModal()" class="text-sand dark:text-[#86EFAC] hover:text-bark dark:hover:text-[#B6EADA] text-xl leading-none">✕</button>
+    </div>
+    <!-- Original review snippet -->
+    <div class="bg-parchment/60 dark:bg-[#0A0118]/40 border border-parchment dark:border-[#86EFAC]/8 rounded-xl p-3 mb-4">
+      <p id="modal-review-text" class="text-xs text-bark/70 dark:text-[#86EFAC] italic"></p>
+    </div>
+    <!-- Sentiment badge -->
+    <div id="modal-sentiment-wrap" class="mb-3"></div>
+    <!-- Quick reply templates -->
+    <div class="mb-3">
+      <p class="text-xs font-semibold text-sand dark:text-[#86EFAC] uppercase tracking-wider mb-2">Quick Templates</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="useTemplate('thank')" class="text-xs px-3 py-1.5 rounded-lg border border-parchment dark:border-[#86EFAC]/12
+          text-bark dark:text-[#B6EADA] hover:border-moss dark:hover:border-[#86EFAC] hover:text-moss dark:hover:text-[#B6EADA] transition-colors">
+          👍 Thank you
+        </button>
+        <button onclick="useTemplate('sorry')" class="text-xs px-3 py-1.5 rounded-lg border border-parchment dark:border-[#86EFAC]/12
+          text-bark dark:text-[#B6EADA] hover:border-ember dark:hover:border-[#86EFAC] hover:text-ember dark:hover:text-[#B6EADA] transition-colors">
+          🙏 Apologize
+        </button>
+        <button onclick="useTemplate('followup')" class="text-xs px-3 py-1.5 rounded-lg border border-parchment dark:border-[#86EFAC]/12
+          text-bark dark:text-[#B6EADA] hover:border-sand dark:hover:border-[#86EFAC] hover:text-sand dark:hover:text-[#B6EADA] transition-colors">
+          📬 Follow-up
+        </button>
+      </div>
+    </div>
+    <textarea id="reply-textarea" rows="4" placeholder="Type your reply…"
+      class="w-full rounded-xl border border-parchment dark:border-[#86EFAC]/12 bg-white dark:bg-[#0A0118]/40
+             text-sm text-bark dark:text-[#B6EADA] placeholder-sand dark:placeholder-[#86EFAC]
+             px-4 py-3 focus:outline-none focus:ring-2 focus:ring-ember dark:focus:ring-[#86EFAC] resize-none mb-4"></textarea>
+    <div class="flex gap-3 justify-end">
+      <button onclick="closeModal()" class="text-sm font-semibold px-5 py-2.5 rounded-xl
+        border border-parchment dark:border-[#86EFAC]/12 text-sand dark:text-[#86EFAC]
+        hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/11 transition-colors">Cancel</button>
+      <button onclick="submitReply()" class="text-sm font-bold px-5 py-2.5 rounded-xl
+        bg-bark dark:bg-[#B6EADA] text-cream dark:text-[#03001C]
+        hover:bg-ember dark:hover:bg-[#0A0118] dark:hover:text-[#B6EADA] transition-colors">Send Reply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD REVIEW MODAL ══ -->
+<div id="add-modal-backdrop" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/25
+       rounded-2xl p-6 w-full max-w-md shadow-2xl scale-95 transition-all duration-200" id="add-modal-box">
+    <div class="flex items-start justify-between mb-5">
+      <h3 class="font-serif italic text-xl dark:text-[#B6EADA]">Add New Review</h3>
+      <button onclick="closeAddModal()" class="text-sand dark:text-[#86EFAC] hover:text-bark dark:hover:text-[#B6EADA] text-xl leading-none">✕</button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wider text-sand dark:text-[#86EFAC] block mb-1">Reviewer Name</label>
+        <input id="new-name" type="text" placeholder="e.g. Ravi K." class="w-full rounded-xl border border-parchment dark:border-[#86EFAC]/12
+          bg-white dark:bg-[#0A0118]/40 text-sm text-bark dark:text-[#B6EADA] px-4 py-2.5
+          focus:outline-none focus:ring-2 focus:ring-ember dark:focus:ring-[#86EFAC] placeholder-sand dark:placeholder-[#86EFAC]"/>
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wider text-sand dark:text-[#86EFAC] block mb-1">Review Text</label>
+        <textarea id="new-text" rows="3" placeholder="Review content…" class="w-full rounded-xl border border-parchment dark:border-[#86EFAC]/12
+          bg-white dark:bg-[#0A0118]/40 text-sm text-bark dark:text-[#B6EADA] px-4 py-2.5
+          focus:outline-none focus:ring-2 focus:ring-ember dark:focus:ring-[#86EFAC] resize-none placeholder-sand dark:placeholder-[#86EFAC]"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wider text-sand dark:text-[#86EFAC] block mb-1">Platform</label>
+          <select id="new-platform" class="w-full rounded-xl border border-parchment dark:border-[#86EFAC]/12
+            bg-white dark:bg-[#0A0118]/40 text-sm text-bark dark:text-[#B6EADA] px-3 py-2.5
+            focus:outline-none focus:ring-2 focus:ring-ember dark:focus:ring-[#86EFAC]">
+            <option value="amazon">📦 Amazon</option>
+            <option value="google">🔍 Google</option>
+            <option value="shopify">🛍️ Shopify</option>
+            <option value="trustpilot">⭐ Trustpilot</option>
+            <option value="yelp">🍽️ Yelp</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wider text-sand dark:text-[#86EFAC] block mb-1">Rating</label>
+          <select id="new-rating" class="w-full rounded-xl border border-parchment dark:border-[#86EFAC]/12
+            bg-white dark:bg-[#0A0118]/40 text-sm text-bark dark:text-[#B6EADA] px-3 py-2.5
+            focus:outline-none focus:ring-2 focus:ring-ember dark:focus:ring-[#86EFAC]">
+            <option value="5">★★★★★ 5.0</option>
+            <option value="4">★★★★☆ 4.0</option>
+            <option value="3">★★★☆☆ 3.0</option>
+            <option value="2">★★☆☆☆ 2.0</option>
+            <option value="1">★☆☆☆☆ 1.0</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wider text-sand dark:text-[#86EFAC] block mb-1">Sentiment</label>
+        <div class="flex gap-2">
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-parchment dark:border-[#86EFAC]/12 cursor-pointer
+            text-xs font-semibold text-moss dark:text-[#B6EADA] hover:border-moss dark:hover:border-[#86EFAC] has-[:checked]:border-moss has-[:checked]:bg-moss/8 dark:has-[:checked]:border-[#B6EADA] dark:has-[:checked]:bg-[#B6EADA]/10">
+            <input type="radio" name="new-sentiment" value="positive" class="hidden" checked/> ▲ Positive
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-parchment dark:border-[#86EFAC]/12 cursor-pointer
+            text-xs font-semibold text-sand dark:text-[#B6EADA] hover:border-sand dark:hover:border-[#86EFAC] has-[:checked]:border-sand has-[:checked]:bg-sand/8 dark:has-[:checked]:border-[#B6EADA] dark:has-[:checked]:bg-[#B6EADA]/10">
+            <input type="radio" name="new-sentiment" value="neutral" class="hidden"/> ◆ Neutral
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-parchment dark:border-[#86EFAC]/12 cursor-pointer
+            text-xs font-semibold text-ember dark:text-[#86EFAC] hover:border-ember dark:hover:border-[#86EFAC] has-[:checked]:border-ember has-[:checked]:bg-ember/8 dark:has-[:checked]:border-[#86EFAC] dark:has-[:checked]:bg-[#86EFAC]/10">
+            <input type="radio" name="new-sentiment" value="negative" class="hidden"/> ▼ Negative
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-3 justify-end mt-5">
+      <button onclick="closeAddModal()" class="text-sm font-semibold px-5 py-2.5 rounded-xl
+        border border-parchment dark:border-[#86EFAC]/12 text-sand dark:text-[#86EFAC]
+        hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/11 transition-colors">Cancel</button>
+      <button onclick="addReview()" class="text-sm font-bold px-5 py-2.5 rounded-xl
+        bg-bark dark:bg-[#B6EADA] text-cream dark:text-[#03001C]
+        hover:bg-ember dark:hover:bg-[#0A0118] dark:hover:text-[#B6EADA] transition-colors">+ Add Review</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DELETE CONFIRM MODAL ══ -->
+<div id="delete-modal-backdrop" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/30 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <h3 class="font-serif italic text-xl dark:text-[#B6EADA] mb-2">Delete Review?</h3>
+    <p class="text-sm text-sand dark:text-[#86EFAC] mb-5">This action cannot be undone.</p>
+    <div class="flex gap-3 justify-end">
+      <button onclick="closeDeleteModal()" class="text-sm font-semibold px-5 py-2.5 rounded-xl
+        border border-parchment dark:border-[#86EFAC]/12 text-sand hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/11 transition-colors">Cancel</button>
+      <button onclick="confirmDelete()" class="text-sm font-bold px-5 py-2.5 rounded-xl
+        bg-ember dark:bg-[#86EFAC] text-cream dark:text-[#03001C]
+        hover:bg-red-700 dark:hover:opacity-80 transition-colors">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile overlay -->
+<div id="overlay" onclick="closeSidebar()"
+  class="fixed inset-0 bg-black/60 z-30 hidden backdrop-blur-sm"></div>
+
+<div class="flex min-h-screen">
+
+  <!-- ══════════════ SIDEBAR ══════════════ -->
+  <aside id="sidebar"
+    class="fixed top-0 left-0 bottom-0 z-40 w-56 flex flex-col
+           bg-bark dark:bg-[#03001C] text-cream
+           -translate-x-full transition-transform duration-300">
+
+    <div class="px-6 py-7 border-b border-white/10 dark:border-[#86EFAC]/15 flex items-center justify-between shrink-0">
+      <div>
+        <div class="flex items-baseline">
+          <span class="font-serif italic text-2xl">Review</span>
+          <span class="font-bold text-2xl text-ember dark:text-[#B6EADA]">IQ</span>
+        </div>
+        <p class="text-[10px] mt-0.5 font-mono tracking-widest uppercase text-white/30 dark:text-[#B6EADA]/40">Management Suite</p>
+      </div>
+      <button onclick="closeSidebar()" class="p-1 text-[#86EFAC] hover:text-[#B6EADA] text-lg">✕</button>
+    </div>
+
+    <nav class="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
+      <a href="#" onclick="setActivePage(this,'dashboard')" data-page="dashboard"
+        class="nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold
+               text-cream bg-ember/20 border-r-2 border-ember
+               dark:bg-[#B6EADA]/10 dark:border-[#86EFAC] dark:text-[#B6EADA]">
+        <span>◈</span> Dashboard
+        <span class="nav-tooltip bg-bark dark:bg-[#0A0118] text-cream dark:text-[#B6EADA] text-xs px-2 py-1 rounded-lg border border-white/10">Dashboard</span>
+      </a>
+      <a href="#" onclick="setActivePage(this,'reviews')" data-page="reviews"
+        class="nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+               text-white/40 hover:text-[#B6EADA] hover:bg-[#86EFAC]/21
+               dark:hover:text-[#B6EADA] dark:hover:bg-[#86EFAC]/11 transition-colors">
+        <span>⊞</span> All Reviews
+        <span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#86EFAC] dark:bg-[#86EFAC]">
+          <span class="ping absolute inset-0 rounded-full bg-[#86EFAC] opacity-75"></span>
+        </span>
+      </a>
+      <a href="#" onclick="setActivePage(this,'analytics')" data-page="analytics"
+        class="nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+               text-white/40 hover:text-[#B6EADA] hover:bg-[#86EFAC]/21
+               dark:hover:text-[#B6EADA] dark:hover:bg-[#0A0118]/11 transition-colors">
+        <span>◎</span> Analytics
+      </a>
+      <a href="#" onclick="setActivePage(this,'platforms')" data-page="platforms"
+        class="nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+               text-white/40 hover:text-[#B6EADA] hover:bg-[#86EFAC]/21
+               dark:hover:text-[#B6EADA] dark:hover:bg-[#86EFAC]/11 transition-colors">
+        <span>✦</span> Platforms
+      </a>
+      <a href="#" onclick="setActivePage(this,'responses')" data-page="responses"
+        class="nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+               text-white/40 hover:text-[#B6EADA] hover:bg-[#86EFAC]/21
+               dark:hover:text-[#B6EADA] dark:hover:bg-[#86EFAC]/11 transition-colors">
+        <span>⌘</span> Responses
+      </a>
+      <a href="#" onclick="setActivePage(this,'settings')" data-page="settings"
+        class="nav-item relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+               text-white/40 hover:text-[#B6EADA] hover:bg-[#86EFAC]/21 transition-colors">
+        <span>◐</span> Settings
+      </a>
+    </nav>
+
+    <div class="px-4 py-5 border-t border-white/10 dark:border-[#86EFAC]/10 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-ember dark:bg-[#B6EADA]/20 dark:ring-1 dark:ring-[#86EFAC]/60
+          flex items-center justify-center text-sm font-bold text-white dark:text-[#B6EADA] shrink-0">A</div>
+        <div class="min-w-0">
+          <p class="text-xs font-semibold truncate dark:text-[#B6EADA]">Arjun Sharma</p>
+          <p class="text-xs text-white/35 dark:text-[#86EFAC]">Store Manager</p>
+        </div>
+        <button onclick="showToast('👋 Profile settings coming soon!','info')"
+          class="ml-auto text-[#86EFAC]/60 hover:text-[#B6EADA] text-xs">⚙</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══════════════ MAIN ══════════════ -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-20 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3
+                   bg-cream/90 dark:bg-[#03001C]/95 backdrop-blur
+                   border-b border-parchment dark:border-[#86EFAC]/12">
+
+      <button onclick="toggleSidebar()" aria-label="Menu" class="flex flex-col gap-[5px] p-1 shrink-0">
+        <span class="block w-5 h-0.5 rounded bg-bark dark:bg-[#B6EADA]"></span>
+        <span class="block w-5 h-0.5 rounded bg-bark dark:bg-[#B6EADA]"></span>
+        <span class="block w-5 h-0.5 rounded bg-bark dark:bg-[#B6EADA]"></span>
+      </button>
+
+      <div class="flex-1 min-w-0">
+        <h1 id="page-title" class="font-normal text-xl sm:text-2xl lg:text-3xl leading-tight truncate dark:text-[#B6EADA]">Review Overview</h1>
+        <p class="text-sand dark:text-[#86EFAC] text-xs mt-0.5 hidden sm:block">
+          Last updated: <span id="last-updated" class="font-mono text-bark/60 dark:text-[#B6EADA]/70"></span>
+        </p>
+      </div>
+
+      <!-- Search bar -->
+      <div class="relative hidden md:block">
+        <input id="search-input" type="text" placeholder="Search reviews…"
+          oninput="searchReviews(this.value)"
+          class="text-xs border border-parchment dark:border-[#86EFAC]/25 rounded-xl pl-8 pr-3 py-2
+                 bg-white dark:bg-[#0A0118] text-bark dark:text-[#B6EADA] w-44
+                 focus:outline-none focus:ring-2 focus:ring-ember dark:focus:ring-[#86EFAC]
+                 placeholder-sand dark:placeholder-[#86EFAC]"/>
+        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-sand dark:text-[#B6EADA]/50 text-xs">🔍</span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <select id="date-filter" onchange="filterByDate(this.value)"
+          class="hidden sm:block text-xs sm:text-sm border border-parchment dark:border-[#86EFAC]/25
+                 rounded-xl px-3 py-2 bg-white dark:bg-[#0A0118]
+                 text-bark dark:text-[#B6EADA] font-medium focus:outline-none cursor-pointer">
+          <option value="30">Last 30 days</option>
+          <option value="7">Last 7 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">This year</option>
+        </select>
+
+        <!-- Notification bell -->
+        <button onclick="showToast('📬 3 reviews need your reply!','info')"
+          class="relative p-1.5 text-sand dark:text-[#B6EADA]/60 hover:text-bark dark:hover:text-[#B6EADA] transition-colors">
+          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <span class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#86EFAC]">
+            <span class="ping absolute inset-0 rounded-full bg-[#86EFAC] opacity-75"></span>
+          </span>
+        </button>
+
+        <!-- Dark/Light toggle -->
+        <label class="swap swap-rotate text-bark dark:text-[#B6EADA]">
+          <input type="checkbox" id="themeToggle" onchange="applyTheme(this.checked)"/>
+          <svg class="swap-on h-6 w-6 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"/>
+          </svg>
+          <svg class="swap-off h-6 w-6 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z"/>
+          </svg>
+        </label>
+
+        <button onclick="openAddModal()"
+          class="bg-bark dark:bg-[#B6EADA] dark:text-[#03001C] text-cream text-xs sm:text-sm font-bold
+                 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl
+                 hover:bg-ember dark:hover:bg-[#B6EADA]/60 dark:hover:text-[#03001C]
+                 transition-colors whitespace-nowrap">
+          + Add Source
+        </button>
+      </div>
+    </header>
+
+    <!-- ══ PAGE BODY ══ -->
+    <div class="flex-1 px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-5">
+
+      <!-- ── STAT CARDS ── -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+
+        <!-- Total -->
+        <div class="bg-bark dark:bg-[#0A0118] dark:border dark:border-[#86EFAC]/30 dark:glow-cyan
+                    text-cream rounded-2xl p-5 sm:p-6 relative overflow-hidden cursor-pointer
+                    sm:col-span-2 xl:col-span-1 hover:scale-[1.02] transition-transform"
+             onclick="showToast('📊 Exporting total review report…','info')">
+          <div class="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/5 dark:bg-[#B6EADA]/5"></div>
+          <div class="absolute -bottom-6 -left-4 w-20 h-20 rounded-full bg-ember/10 dark:bg-[#86EFAC]/10"></div>
+          <p class="text-white/40 dark:text-[#B6EADA]/60 text-xs font-semibold uppercase tracking-widest mb-3 relative">Total Reviews</p>
+          <p class="font-serif italic text-4xl sm:text-5xl mb-2 relative dark:text-[#B6EADA]">
+            <span id="stat-total" class="counter">0</span>
+          </p>
+          <p class="text-xs font-mono relative">
+            <span id="trend-label" class="text-emerald-400 dark:text-[#B6EADA]">↑ +12.4% vs last period</span>
+          </p>
+        </div>
+
+        <!-- Positive -->
+        <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/30 dark:glow-lime
+                    rounded-2xl p-5 sm:p-6 hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer"
+             onclick="filterTable('all','positive')">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-sand dark:text-[#B6EADA]/60 text-xs font-semibold uppercase tracking-widest">Positive</p>
+            <span class="w-8 h-8 bg-moss/10 dark:bg-[#B6EADA]/10 rounded-lg flex items-center justify-center text-moss dark:text-[#B6EADA] font-bold">▲</span>
+          </div>
+          <p class="font-serif italic text-3xl sm:text-4xl text-moss dark:text-[#B6EADA] mb-3">
+            <span id="stat-positive" class="counter">0</span>
+          </p>
+          <div class="flex items-center gap-2">
+            <div class="flex-1 h-1.5 bg-parchment dark:bg-[#0A0118]/50 rounded-full overflow-hidden">
+              <div id="bar-positive" class="h-full bg-moss dark:bg-[#B6EADA] rounded-full bar-fill" style="width:0%"></div>
+            </div>
+            <span id="pct-positive" class="text-xs font-mono text-moss dark:text-[#B6EADA] font-semibold shrink-0">0%</span>
+          </div>
+        </div>
+
+        <!-- Neutral -->
+        <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/30
+                    rounded-2xl p-5 sm:p-6 hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer"
+             onclick="filterTable('all','neutral')">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-sand dark:text-[#B6EADA]/60 text-xs font-semibold uppercase tracking-widest">Neutral</p>
+            <span class="w-8 h-8 bg-sand/10 dark:bg-[#B6EADA]/10 rounded-lg flex items-center justify-center text-sand dark:text-[#B6EADA] font-bold">◆</span>
+          </div>
+          <p class="font-serif italic text-3xl sm:text-4xl text-sand dark:text-[#B6EADA] mb-3">
+            <span id="stat-neutral" class="counter">0</span>
+          </p>
+          <div class="flex items-center gap-2">
+            <div class="flex-1 h-1.5 bg-parchment dark:bg-[#0A0118]/50 rounded-full overflow-hidden">
+              <div id="bar-neutral" class="h-full bg-sand dark:bg-[#B6EADA] rounded-full bar-fill" style="width:0%"></div>
+            </div>
+            <span id="pct-neutral" class="text-xs font-mono text-sand dark:text-[#B6EADA] font-semibold shrink-0">0%</span>
+          </div>
+        </div>
+
+        <!-- Negative -->
+        <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/30 dark:glow-coral
+                    rounded-2xl p-5 sm:p-6 hover:shadow-lg hover:scale-[1.02] transition-all cursor-pointer"
+             onclick="filterTable('all','negative')">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-sand dark:text-[#86EFAC]/60 text-xs font-semibold uppercase tracking-widest">Negative</p>
+            <span class="w-8 h-8 bg-ember/10 dark:bg-[#86EFAC]/10 rounded-lg flex items-center justify-center text-ember dark:text-[#86EFAC] font-bold">▼</span>
+          </div>
+          <p class="font-serif italic text-3xl sm:text-4xl text-ember dark:text-[#86EFAC] mb-3">
+            <span id="stat-negative" class="counter">0</span>
+          </p>
+          <div class="flex items-center gap-2">
+            <div class="flex-1 h-1.5 bg-parchment dark:bg-[#0A0118]/50 rounded-full overflow-hidden">
+              <div id="bar-negative" class="h-full bg-ember dark:bg-[#86EFAC] rounded-full bar-fill" style="width:0%"></div>
+            </div>
+            <span id="pct-negative" class="text-xs font-mono text-ember dark:text-[#86EFAC] font-semibold shrink-0">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── CHARTS ROW ── -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <!-- Donut -->
+        <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/25 dark:glow-violet rounded-2xl p-5 sm:p-6">
+          <h2 class="text-xs font-bold uppercase tracking-widest text-sand dark:text-[#86EFAC] mb-5">Sentiment Split</h2>
+          <div class="flex flex-row md:flex-col items-center gap-6 md:gap-0">
+            <div class="flex justify-center md:mb-5 shrink-0">
+              <div class="relative w-32 h-32">
+                <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#EDE8DF" stroke-width="3.2" class="dark:stroke-[#86EFAC]/20"/>
+                  <circle id="donut-pos" cx="18" cy="18" r="15.9" fill="none" stroke="#3A6144" stroke-width="3.2" stroke-dasharray="67 33" stroke-dashoffset="0" stroke-linecap="round" style="transition:stroke-dasharray .8s ease,stroke .3s"/>
+                  <circle id="donut-neu" cx="18" cy="18" r="15.9" fill="none" stroke="#8C7B5E" stroke-width="3.2" stroke-dasharray="20 80" stroke-dashoffset="-67" stroke-linecap="round" style="transition:stroke-dasharray .8s ease,stroke .3s"/>
+                  <circle id="donut-neg" cx="18" cy="18" r="15.9" fill="none" stroke="#C94A1E" stroke-width="3.2" stroke-dasharray="13 87" stroke-dashoffset="-87" stroke-linecap="round" style="transition:stroke-dasharray .8s ease,stroke .3s"/>
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                  <span id="donut-center-pct" class="font-serif italic text-2xl dark:text-[#86EFAC]">67%</span>
+                  <span class="text-xs text-sand dark:text-[#86EFAC]">positive</span>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-2.5 flex-1 md:flex-none w-full">
+              <div class="flex items-center gap-2.5 cursor-pointer" onclick="filterTable('all','positive')">
+                <span class="w-2.5 h-2.5 rounded-full bg-moss dark:bg-[#B6EADA] shrink-0"></span>
+                <span class="text-xs flex-1 dark:text-[#B6EADA]">Positive</span>
+                <span id="legend-pos" class="font-mono text-xs font-semibold dark:text-[#B6EADA]">0</span>
+              </div>
+              <div class="flex items-center gap-2.5 cursor-pointer" onclick="filterTable('all','neutral')">
+                <span class="w-2.5 h-2.5 rounded-full bg-sand dark:bg-[#B6EADA] shrink-0"></span>
+                <span class="text-xs flex-1 dark:text-[#B6EADA]">Neutral</span>
+                <span id="legend-neu" class="font-mono text-xs font-semibold dark:text-[#B6EADA]">0</span>
+              </div>
+              <div class="flex items-center gap-2.5 cursor-pointer" onclick="filterTable('all','negative')">
+                <span class="w-2.5 h-2.5 rounded-full bg-ember dark:bg-[#86EFAC] shrink-0"></span>
+                <span class="text-xs flex-1 dark:text-[#B6EADA]">Negative</span>
+                <span id="legend-neg" class="font-mono text-xs font-semibold dark:text-[#86EFAC]">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Platform breakdown -->
+        <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/20 rounded-2xl p-5 sm:p-6 md:col-span-2">
+          <h2 class="text-xs font-bold uppercase tracking-widest text-sand dark:text-[#B6EADA] mb-5">Reviews by Platform</h2>
+          <div class="space-y-4" id="platform-breakdown"></div>
+        </div>
+      </div>
+
+      <!-- ── TABLE ── -->
+      <div class="bg-white dark:bg-[#0A0118] border border-parchment dark:border-[#86EFAC]/15 rounded-2xl overflow-hidden">
+
+        <!-- Toolbar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-parchment dark:border-[#86EFAC]/12">
+          <div class="flex items-center gap-3">
+            <h2 class="text-xs font-bold uppercase tracking-widest text-sand dark:text-[#B6EADA] shrink-0">Recent Reviews</h2>
+            <!-- Sort -->
+            <select id="sort-select" onchange="sortReviews(this.value)"
+              class="text-xs border border-parchment dark:border-[#86EFAC]/12 rounded-lg px-2 py-1.5
+                     bg-white dark:bg-[#0A0118]/40 text-bark dark:text-[#B6EADA] focus:outline-none cursor-pointer">
+              <option value="date-desc">Newest first</option>
+              <option value="date-asc">Oldest first</option>
+              <option value="rating-desc">Highest rated</option>
+              <option value="rating-asc">Lowest rated</option>
+            </select>
+          </div>
+          <!-- Platform filter chips -->
+          <div class="flex items-center gap-2 overflow-x-auto pb-0.5" id="filter-chips">
+            <button onclick="filterTable('all')" data-filter="all"
+              class="filter-btn shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors">All</button>
+            <button onclick="filterTable('amazon')" data-filter="amazon"
+              class="filter-btn shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/17 dark:hover:text-[#B6EADA]">Amazon</button>
+            <button onclick="filterTable('google')" data-filter="google"
+              class="filter-btn shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/17 dark:hover:text-[#B6EADA]">Google</button>
+            <button onclick="filterTable('shopify')" data-filter="shopify"
+              class="filter-btn shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/17 dark:hover:text-[#B6EADA]">Shopify</button>
+            <button onclick="filterTable('trustpilot')" data-filter="trustpilot"
+              class="filter-btn shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#0A0118]/17 dark:hover:text-[#B6EADA]">Trustpilot</button>
+            <button onclick="filterTable('yelp')" data-filter="yelp"
+              class="filter-btn shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/17 dark:hover:text-[#B6EADA]">Yelp</button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[700px]">
+            <thead>
+              <tr class="bg-parchment/50 dark:bg-[#0A0118]/30">
+                <th class="text-left px-4 sm:px-6 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60">Reviewer</th>
+                <th class="text-left px-4 sm:px-6 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60">Review</th>
+                <th class="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60">Platform</th>
+                <th class="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60 cursor-pointer" onclick="sortReviews('rating-desc')">Rating ↕</th>
+                <th class="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60">Sentiment</th>
+                <th class="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60 hidden lg:table-cell cursor-pointer" onclick="sortReviews('date-desc')">Date ↕</th>
+                <th class="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-sand dark:text-[#B6EADA]/60">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="reviewTable"></tbody>
+          </table>
+        </div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="hidden py-16 flex flex-col items-center justify-center text-center">
+          <span class="text-4xl mb-3">🔍</span>
+          <p class="font-serif italic text-lg dark:text-[#B6EADA]">No reviews found</p>
+          <p class="text-sm text-sand dark:text-[#86EFAC] mt-1">Try adjusting your search or filters</p>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3
+                    px-4 sm:px-6 py-4 border-t border-parchment dark:border-[#86EFAC]/20 bg-parchment/30 dark:bg-[#03001C]">
+          <p class="text-xs text-sand dark:text-[#B6EADA]/70 font-mono">
+            Showing <span id="showCount" class="font-semibold text-bark dark:text-[#B6EADA]">0</span>
+            of <span id="totalCount" class="font-semibold text-bark dark:text-[#B6EADA]">0</span> reviews
+          </p>
+          <div class="flex gap-2 flex-wrap" id="pagination"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════
+   DATA STORE
+════════════════════════════════════ */
+const PLATFORM_META = {
+  amazon:     { label: '📦 Amazon',     color: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',        bar: 'bg-amber-400 dark:bg-[#B6EADA]',   starColor: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' },
+  google:     { label: '🔍 Google',     color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',            bar: 'bg-blue-400 dark:bg-[#B6EADA]',    starColor: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
+  shopify:    { label: '🛍️ Shopify',    color: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400',        bar: 'bg-green-500 dark:bg-[#B6EADA]',   starColor: 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
+  trustpilot: { label: '⭐ Trustpilot', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', bar: 'bg-emerald-500 dark:bg-[#86EFAC]', starColor: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  yelp:       { label: '🍽️ Yelp',       color: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',               bar: 'bg-red-400 dark:bg-[#86EFAC]',     starColor: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+};
+
+const SENTIMENT_META = {
+  positive: { label: '▲ Positive', color: 'bg-moss/10 text-moss dark:bg-[#B6EADA]/10 dark:text-[#B6EADA]' },
+  neutral:  { label: '◆ Neutral',  color: 'bg-sand/10 text-sand dark:bg-[#B6EADA]/10 dark:text-[#B6EADA]' },
+  negative: { label: '▼ Negative', color: 'bg-ember/10 text-ember dark:bg-[#86EFAC]/10 dark:text-[#86EFAC]' },
+};
+
+const AVATAR_COLORS = [
+  'bg-amber-100 dark:bg-[#B6EADA]/10 dark:ring-[#86EFAC]/40 text-amber-700 dark:text-[#B6EADA]',
+  'bg-blue-100 dark:bg-[#B6EADA]/10 dark:ring-[#86EFAC]/40 text-blue-700 dark:text-[#B6EADA]',
+  'bg-red-100 dark:bg-[#86EFAC]/10 dark:ring-[#86EFAC]/40 text-red-700 dark:text-[#86EFAC]',
+  'bg-emerald-100 dark:bg-[#86EFAC]/10 dark:ring-[#86EFAC]/40 text-emerald-700 dark:text-[#86EFAC]',
+  'bg-orange-100 dark:bg-[#86EFAC]/10 dark:ring-[#86EFAC]/40 text-orange-700 dark:text-[#86EFAC]',
+  'bg-purple-100 dark:bg-[#86EFAC]/10 dark:ring-[#86EFAC]/40 text-purple-700 dark:text-[#86EFAC]',
+];
+
+let reviews = [
+  { id:1, name:'Priya M.',   role:'Verified Buyer',  text:'Absolutely love this product! Quality is outstanding and delivery was super fast.', platform:'amazon',     rating:5, sentiment:'positive', date:'2026-03-20', replied:false },
+  { id:2, name:'Rohan T.',   role:'Local Guide',     text:'Good experience overall. Staff was helpful and the product matched the description.', platform:'google',     rating:4, sentiment:'neutral',  date:'2026-03-19', replied:false },
+  { id:3, name:'Kavya S.',   role:'Verified Buyer',  text:'Disappointed with packaging. Product took 2 weeks and arrived damaged.',             platform:'shopify',    rating:2, sentiment:'negative', date:'2026-03-18', replied:false },
+  { id:4, name:'Aditya R.',  role:'Verified',        text:'Five stars! Best purchase I have made this year. Will definitely order again soon.',  platform:'trustpilot', rating:5, sentiment:'positive', date:'2026-03-17', replied:true  },
+  { id:5, name:'Meera N.',   role:'Elite Reviewer',  text:'Average experience. Nothing special, but nothing terrible either. Would consider again.', platform:'yelp',  rating:3, sentiment:'neutral',  date:'2026-03-16', replied:false },
+  { id:6, name:'Suresh V.',  role:'Verified Buyer',  text:'Incredible value for the price. Highly recommend to anyone looking for quality.',    platform:'amazon',     rating:4, sentiment:'positive', date:'2026-03-15', replied:true  },
+  { id:7, name:'Lakshmi P.', role:'Local Guide',     text:'Fast shipping and great packaging. The product works exactly as described.',          platform:'google',     rating:5, sentiment:'positive', date:'2026-03-14', replied:false },
+  { id:8, name:'Vikram J.',  role:'Verified Buyer',  text:'The item was defective on arrival. Customer support was slow to respond.',           platform:'shopify',    rating:1, sentiment:'negative', date:'2026-03-13', replied:false },
+  { id:9, name:'Ananya B.',  role:'Verified',        text:'Excellent quality and fantastic customer service. Very happy with my order.',         platform:'trustpilot', rating:5, sentiment:'positive', date:'2026-03-12', replied:false },
+  { id:10,name:'Deepak M.',  role:'Reviewer',        text:'The product is okay but the price seems a bit high for the quality delivered.',       platform:'yelp',       rating:3, sentiment:'neutral',  date:'2026-03-11', replied:true  },
+];
+
+let nextId = 11;
+let activePlatformFilter = 'all';
+let activeSentimentFilter = 'all';
+let activeSearch = '';
+let activeSort = 'date-desc';
+let currentPage = 1;
+const PAGE_SIZE = 6;
+let pendingDeleteId = null;
+let currentModalReview = null;
+
+/* ════════════════════════════════════
+   THEME
+════════════════════════════════════ */
+function applyTheme(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  updatePlatformBreakdown();
+}
+
+/* ════════════════════════════════════
+   TOAST
+════════════════════════════════════ */
+let toastTimeout;
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  const icon = document.getElementById('toast-icon');
+  const msgEl = document.getElementById('toast-msg');
+  icon.textContent = type==='success' ? '✓' : type==='error' ? '✕' : 'ℹ';
+  msgEl.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translateY(0)';
+  t.style.pointerEvents = 'auto';
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(-8px)';
+    t.style.pointerEvents = 'none';
+  }, 3000);
+}
+
+/* ════════════════════════════════════
+   SIDEBAR & NAV
+════════════════════════════════════ */
+function openSidebar()  {
+  document.getElementById('sidebar').classList.remove('-translate-x-full');
+  document.getElementById('overlay').classList.remove('hidden');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.add('-translate-x-full');
+  document.getElementById('overlay').classList.add('hidden');
+}
+function toggleSidebar() {
+  const isOpen = !document.getElementById('sidebar').classList.contains('-translate-x-full');
+  isOpen ? closeSidebar() : openSidebar();
+}
+
+function setActivePage(el, page) {
+  event.preventDefault();
+  document.querySelectorAll('nav a').forEach(a => {
+    a.classList.remove('text-cream','bg-ember/20','border-r-2','border-ember','dark:bg-[#B6EADA]/10','dark:border-[#86EFAC]','dark:text-[#B6EADA]','font-semibold');
+    a.classList.add('text-white/40','font-medium');
+  });
+  el.classList.remove('text-white/40','font-medium');
+  el.classList.add('text-cream','bg-ember/20','border-r-2','border-ember','dark:bg-[#B6EADA]/10','dark:border-[#86EFAC]','dark:text-[#B6EADA]','font-semibold');
+  document.getElementById('page-title').textContent = {
+    dashboard:'Review Overview', reviews:'All Reviews',
+    analytics:'Analytics', platforms:'Platforms',
+    responses:'Responses', settings:'Settings'
+  }[page] || 'Dashboard';
+  showToast(`📂 Navigated to ${el.textContent.trim()}`, 'info');
+  closeSidebar();
+}
+
+/* ════════════════════════════════════
+   STATS
+════════════════════════════════════ */
+function computeStats(data) {
+  const total = data.length;
+  const pos = data.filter(r=>r.sentiment==='positive').length;
+  const neu = data.filter(r=>r.sentiment==='neutral').length;
+  const neg = data.filter(r=>r.sentiment==='negative').length;
+  return { total, pos, neu, neg };
+}
+
+function animateCounter(el, target) {
+  let current = 0;
+  const step = Math.max(1, Math.ceil(target / 40));
+  const timer = setInterval(() => {
+    current = Math.min(current + step, target);
+    el.textContent = current.toLocaleString();
+    if (current >= target) clearInterval(timer);
+  }, 25);
+}
+
+function updateStats() {
+  const { total, pos, neu, neg } = computeStats(reviews);
+  animateCounter(document.getElementById('stat-total'),    total);
+  animateCounter(document.getElementById('stat-positive'), pos);
+  animateCounter(document.getElementById('stat-neutral'),  neu);
+  animateCounter(document.getElementById('stat-negative'), neg);
+  animateCounter(document.getElementById('legend-pos'), pos);
+  animateCounter(document.getElementById('legend-neu'), neu);
+  animateCounter(document.getElementById('legend-neg'), neg);
+
+  const pp = total ? Math.round(pos/total*100) : 0;
+  const np = total ? Math.round(neu/total*100) : 0;
+  const ngp= total ? Math.round(neg/total*100) : 0;
+
+  setTimeout(() => {
+    document.getElementById('bar-positive').style.width = pp+'%';
+    document.getElementById('bar-neutral').style.width  = np+'%';
+    document.getElementById('bar-negative').style.width = ngp+'%';
+    document.getElementById('pct-positive').textContent = pp+'%';
+    document.getElementById('pct-neutral').textContent  = np+'%';
+    document.getElementById('pct-negative').textContent = ngp+'%';
+  }, 100);
+
+  // Donut
+  document.getElementById('donut-center-pct').textContent = pp+'%';
+  const posOff = 0, neuOff = -pp, negOff = -(pp+np);
+  document.getElementById('donut-pos').setAttribute('stroke-dasharray', `${pp} ${100-pp}`);
+  document.getElementById('donut-pos').setAttribute('stroke-dashoffset', posOff);
+  document.getElementById('donut-neu').setAttribute('stroke-dasharray', `${np} ${100-np}`);
+  document.getElementById('donut-neu').setAttribute('stroke-dashoffset', neuOff);
+  document.getElementById('donut-neg').setAttribute('stroke-dasharray', `${ngp} ${100-ngp}`);
+  document.getElementById('donut-neg').setAttribute('stroke-dashoffset', negOff);
+}
+
+
+
+/* ════════════════════════════════════
+   PLATFORM BREAKDOWN
+════════════════════════════════════ */
+function updatePlatformBreakdown() {
+  const container = document.getElementById('platform-breakdown');
+  const counts = {};
+  const totals = {};
+  reviews.forEach(r => {
+    counts[r.platform] = (counts[r.platform]||0)+1;
+    totals[r.platform] = (totals[r.platform]||0)+r.rating;
+  });
+  const max = Math.max(...Object.values(counts));
+  container.innerHTML = Object.entries(PLATFORM_META).map(([key, meta]) => {
+    const count = counts[key]||0;
+    const avg = count ? (totals[key]/count).toFixed(1) : '0.0';
+    const pct = max ? Math.round(count/max*100) : 0;
+    return `
+    <div class="cursor-pointer" onclick="filterTable('${key}')">
+      <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold dark:text-[#B6EADA]">${meta.label}</span>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3">
+          <span class="font-mono text-xs text-sand dark:text-[#86EFAC] hidden sm:inline">${count.toLocaleString()} reviews</span>
+          <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold ${meta.starColor}">★ ${avg}</span>
+        </div>
+      </div>
+      <div class="h-2 bg-parchment dark:bg-[#0A0118]/50 rounded-full overflow-hidden">
+        <div class="h-full rounded-full bar-fill ${meta.bar}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════
+   TABLE RENDER
+════════════════════════════════════ */
+function getFilteredReviews() {
+  let data = [...reviews];
+  if (activePlatformFilter !== 'all') data = data.filter(r=>r.platform===activePlatformFilter);
+  if (activeSentimentFilter !== 'all') data = data.filter(r=>r.sentiment===activeSentimentFilter);
+  if (activeSearch) {
+    const q = activeSearch.toLowerCase();
+    data = data.filter(r=>r.name.toLowerCase().includes(q)||r.text.toLowerCase().includes(q)||r.platform.includes(q));
+  }
+  data.sort((a,b)=>{
+    if (activeSort==='date-desc') return new Date(b.date)-new Date(a.date);
+    if (activeSort==='date-asc')  return new Date(a.date)-new Date(b.date);
+    if (activeSort==='rating-desc') return b.rating-a.rating;
+    if (activeSort==='rating-asc')  return a.rating-b.rating;
+    return 0;
+  });
+  return data;
+}
+
+function renderStars(n) {
+  return Array.from({length:5}, (_,i)=> i<n ? '★':'☆').join('');
+}
+
+function renderTable() {
+  const data = getFilteredReviews();
+  const total = data.length;
+  const pages = Math.ceil(total/PAGE_SIZE);
+  if (currentPage > pages) currentPage = Math.max(1,pages);
+  const slice = data.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+
+  document.getElementById('showCount').textContent = total > 0 ? `${(currentPage-1)*PAGE_SIZE+1}–${Math.min(currentPage*PAGE_SIZE,total)}` : '0';
+  document.getElementById('totalCount').textContent = total;
+
+  const empty = document.getElementById('empty-state');
+  const tbody = document.getElementById('reviewTable');
+
+  if (slice.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    empty.classList.add('flex');
+  } else {
+    empty.classList.add('hidden');
+    empty.classList.remove('flex');
+    tbody.innerHTML = slice.map((r,i) => {
+      const pm = PLATFORM_META[r.platform];
+      const sm = SENTIMENT_META[r.sentiment];
+      const av = AVATAR_COLORS[i % AVATAR_COLORS.length];
+      const initials = r.name.split(' ').map(x=>x[0]).join('');
+      const replyBtn = r.replied
+        ? `<span class="text-xs font-semibold px-2 sm:px-3 py-1.5 rounded-lg whitespace-nowrap text-moss dark:text-[#B6EADA] bg-moss/8 dark:bg-[#B6EADA]/10">✓ Replied</span>`
+        : `<button onclick="openModal(${r.id})" class="text-xs font-semibold px-2 sm:px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors
+               text-sand border border-parchment hover:text-ember hover:border-ember
+               dark:text-[#B6EADA]/70 dark:border-[#86EFAC]/20 dark:hover:text-[#B6EADA] dark:hover:border-[#86EFAC] ${r.sentiment==='negative'?'!bg-ember !text-cream dark:!bg-[#86EFAC] dark:!text-[#03001C] !border-transparent font-bold':''}">${r.sentiment==='negative'?'Reply !':'Reply'}</button>`;
+      return `
+      <tr class="review-row border-t border-parchment dark:border-[#86EFAC]/5 hover:bg-parchment/50 dark:hover:bg-[#86EFAC]/6 transition-colors group">
+        <td class="px-4 sm:px-6 py-4">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="w-8 h-8 rounded-full dark:ring-1 ${av} flex items-center justify-center font-bold text-sm shrink-0">${initials}</div>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold truncate dark:text-[#B6EADA]">${r.name}</p>
+              <p class="text-xs text-sand dark:text-[#86EFAC] hidden sm:block">${r.role}</p>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 sm:px-6 py-4 max-w-[180px] sm:max-w-xs">
+          <p class="text-sm text-bark/70 dark:text-[#86EFAC] truncate" title="${r.text}">${r.text}</p>
+        </td>
+        <td class="px-4 py-4">
+          <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${pm.color}">${pm.label}</span>
+        </td>
+        <td class="px-4 py-4 whitespace-nowrap">
+          <span class="font-mono text-sm font-semibold dark:text-[#B6EADA]">${r.rating}.0 </span>
+          <span class="text-yellow-400 text-xs">${renderStars(r.rating)}</span>
+        </td>
+        <td class="px-4 py-4">
+          <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${sm.color}">${sm.label}</span>
+        </td>
+        <td class="px-4 py-4 text-xs font-mono text-sand dark:text-[#86EFAC] hidden lg:table-cell whitespace-nowrap">
+          ${new Date(r.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
+        </td>
+        <td class="px-4 py-4">
+          <div class="flex items-center gap-1.5">
+            ${replyBtn}
+            <button onclick="openDeleteModal(${r.id})"
+              class="opacity-0 group-hover:opacity-100 text-xs text-sand dark:text-[#0A0118] hover:text-red-500 dark:hover:text-[#B6EADA] transition-all px-1.5 py-1.5 rounded-lg" title="Delete">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  renderPagination(pages);
+}
+
+/* ════════════════════════════════════
+   PAGINATION
+════════════════════════════════════ */
+function renderPagination(pages) {
+  const container = document.getElementById('pagination');
+  if (pages <= 1) { container.innerHTML=''; return; }
+  let btns = '';
+  btns += `<button onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''} class="px-3 py-1.5 rounded-lg text-sm transition-colors border border-parchment dark:border-[#86EFAC]/20 text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/11 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>`;
+  for (let p=1; p<=pages; p++) {
+    const active = p===currentPage;
+    btns += `<button onclick="goPage(${p})" class="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${active ? 'bg-bark dark:bg-[#B6EADA] text-cream dark:text-[#03001C]' : 'border border-parchment dark:border-[#86EFAC]/20 text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/11'}">${p}</button>`;
+  }
+  btns += `<button onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''} class="px-3 py-1.5 rounded-lg text-sm transition-colors border border-parchment dark:border-[#86EFAC]/20 text-sand dark:text-[#86EFAC] hover:bg-parchment/60 dark:hover:bg-[#86EFAC]/11 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>`;
+  container.innerHTML = btns;
+}
+
+function goPage(p) {
+  const data = getFilteredReviews();
+  const pages = Math.ceil(data.length/PAGE_SIZE);
+  if (p<1||p>pages) return;
+  currentPage = p;
+  renderTable();
+}
+
+/* ════════════════════════════════════
+   FILTERS & SORT
+════════════════════════════════════ */
+function filterTable(platform, sentiment='all') {
+  activePlatformFilter = platform;
+  activeSentimentFilter = sentiment;
+  currentPage = 1;
+
+  // Update filter chip styles
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    const active = btn.dataset.filter === platform;
+    btn.style.background = '';
+    btn.style.color = '';
+    if (active) {
+      const dark = document.documentElement.classList.contains('dark');
+      btn.style.background = dark ? '#B6EADA' : '#2C2416';
+      btn.style.color      = dark ? '#03001C' : '#F5F1EA';
+    }
+  });
+
+  renderTable();
+}
+
+function searchReviews(q) {
+  activeSearch = q;
+  currentPage = 1;
+  renderTable();
+}
+
+function sortReviews(val) {
+  activeSort = val;
+  document.getElementById('sort-select').value = val;
+  currentPage = 1;
+  renderTable();
+}
+
+function filterByDate(days) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - parseInt(days));
+  // For demo: just show a toast
+  showToast(`📅 Showing reviews from last ${days} days`, 'info');
+}
+
+/* ════════════════════════════════════
+   REPLY MODAL
+════════════════════════════════════ */
+function openModal(id) {
+  const r = reviews.find(x=>x.id===id);
+  if (!r) return;
+  currentModalReview = r;
+  document.getElementById('modal-reviewer').textContent = `${r.name} · ${PLATFORM_META[r.platform].label}`;
+  document.getElementById('modal-review-text').textContent = r.text;
+  document.getElementById('reply-textarea').value = '';
+  const sm = SENTIMENT_META[r.sentiment];
+  document.getElementById('modal-sentiment-wrap').innerHTML =
+    `<span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${sm.color}">${sm.label}</span>`;
+  showBackdrop('modal-backdrop');
+}
+
+function closeModal() { hideBackdrop('modal-backdrop'); }
+
+function submitReply() {
+  const txt = document.getElementById('reply-textarea').value.trim();
+  if (!txt) { showToast('Please write a reply first.','error'); return; }
+  if (currentModalReview) {
+    currentModalReview.replied = true;
+    reviews = reviews.map(r=>r.id===currentModalReview.id ? {...r,replied:true} : r);
+  }
+  closeModal();
+  renderTable();
+  showToast('✅ Reply sent successfully!','success');
+}
+
+const TEMPLATES = {
+  thank:   'Thank you so much for your kind words! We are thrilled you had a great experience and hope to serve you again soon. 😊',
+  sorry:   'We sincerely apologize for the inconvenience you experienced. This is not up to our standards and we would love to make it right. Please contact us directly.',
+  followup:'Thank you for your feedback! We have taken note and our team will follow up with you shortly to ensure everything is resolved.',
+};
+function useTemplate(key) { document.getElementById('reply-textarea').value = TEMPLATES[key]; }
+
+/* ════════════════════════════════════
+   ADD REVIEW MODAL
+════════════════════════════════════ */
+function openAddModal() { showBackdrop('add-modal-backdrop'); }
+function closeAddModal() { hideBackdrop('add-modal-backdrop'); }
+
+function addReview() {
+  const name = document.getElementById('new-name').value.trim();
+  const text = document.getElementById('new-text').value.trim();
+  const platform = document.getElementById('new-platform').value;
+  const rating = parseInt(document.getElementById('new-rating').value);
+  const sentiment = document.querySelector('input[name="new-sentiment"]:checked')?.value || 'positive';
+
+  if (!name || !text) { showToast('Please fill in all fields.','error'); return; }
+
+  const today = new Date().toISOString().split('T')[0];
+  reviews.unshift({ id:nextId++, name, role:'New Reviewer', text, platform, rating, sentiment, date:today, replied:false });
+
+  closeAddModal();
+  document.getElementById('new-name').value = '';
+  document.getElementById('new-text').value = '';
+  currentPage = 1;
+  updateStats();
+  updatePlatformBreakdown();
+  renderTable();
+  showToast('🎉 Review added successfully!','success');
+}
+
+/* ════════════════════════════════════
+   DELETE MODAL
+════════════════════════════════════ */
+function openDeleteModal(id) { pendingDeleteId=id; showBackdrop('delete-modal-backdrop'); }
+function closeDeleteModal()  { pendingDeleteId=null; hideBackdrop('delete-modal-backdrop'); }
+
+function confirmDelete() {
+  reviews = reviews.filter(r=>r.id!==pendingDeleteId);
+  closeDeleteModal();
+  renderTable();
+  updateStats();
+  updatePlatformBreakdown();
+  showToast('🗑 Review deleted.','info');
+}
+
+/* ════════════════════════════════════
+   BACKDROP HELPERS
+════════════════════════════════════ */
+function showBackdrop(id) {
+  const el = document.getElementById(id);
+  el.style.pointerEvents = 'auto';
+  el.style.opacity = '1';
+  el.querySelector('div').classList.remove('scale-95');
+  el.querySelector('div').classList.add('scale-100');
+}
+function hideBackdrop(id) {
+  const el = document.getElementById(id);
+  el.style.opacity = '0';
+  el.style.pointerEvents = 'none';
+  el.querySelector('div').classList.add('scale-95');
+  el.querySelector('div').classList.remove('scale-100');
+}
+
+// Close modals on backdrop click
+['modal-backdrop','add-modal-backdrop','delete-modal-backdrop'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target===this) {
+      if (id==='modal-backdrop') closeModal();
+      else if (id==='add-modal-backdrop') closeAddModal();
+      else closeDeleteModal();
+    }
+  });
+});
+
+/* ════════════════════════════════════
+   TIMESTAMP
+════════════════════════════════════ */
+function updateTimestamp() {
+  const now = new Date();
+  document.getElementById('last-updated').textContent =
+    now.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ', ' +
+    now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+
+/* ════════════════════════════════════
+   INIT
+════════════════════════════════════ */
+function init() {
+  updateTimestamp();
+  updateStats();
+  updatePlatformBreakdown();
+  renderTable();
+  filterTable('all');
+
+  // Animate bars on load after slight delay
+  setTimeout(updateStats, 200);
+
+  // Keyboard shortcut: Escape closes modals
+  document.addEventListener('keydown', e => {
+    if (e.key==='Escape') {
+      closeModal(); closeAddModal(); closeDeleteModal();
+    }
+  });
+
+  // Live clock update
+  setInterval(updateTimestamp, 60000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
